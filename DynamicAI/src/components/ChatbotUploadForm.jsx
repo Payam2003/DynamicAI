@@ -1,7 +1,69 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import "./ChatbotUploadForm.css";
 
-export default function ChatbotUploadForm() {
+function DynamicUIRenderer({ components, stepId, onSubmitAction, disabled }) {
+  return (
+    <div className="dynamic-ui-wrapper">
+      {components.map((component, index) => {
+        if (component.component === "button_group") {
+          return (
+            <div key={`${stepId}-${index}`} className="dynamic-ui-block">
+              {component.label && (
+                <p className="dynamic-ui-label">{component.label}</p>
+              )}
+
+              <div className="chat-options">
+                {component.options?.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className="option-btn"
+                    onClick={() =>
+                      onSubmitAction({
+                        stepId,
+                        actionType: "button_group_submit",
+                        payload: {
+                          selected_option: option,
+                        },
+                      })
+                    }
+                    disabled={disabled}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        }
+        // Ancora da valutare i componenti slider e checklist per la dynamicUI, bisogna valutare su come implementarli
+        /*if (component.component === "checklist") {
+          return (
+            <div key={`${stepId}-${index}`} className="dynamic-ui-block">
+              <p className="dynamic-ui-label">
+                {component.label || "Checklist component ancora da implementare."}
+              </p>
+            </div>
+          );
+        }
+
+        if (component.component === "slider") {
+          return (
+            <div key={`${stepId}-${index}`} className="dynamic-ui-block">
+              <p className="dynamic-ui-label">
+                {component.label || "Slider component ancora da implementare."}
+              </p>
+            </div>
+          );
+        }*/
+
+        return null;
+      })}
+    </div>
+  );
+}
+
+function ChatbotUploadForm() {
   const inputRef = useRef(null);
   const [items, setItems] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -12,25 +74,42 @@ export default function ChatbotUploadForm() {
     {
       id: 1,
       sender: "bot",
-      text: "Hi! Upload an image and I’ll help guide you through the task.",
-      options: [],
+      text: "Ciao! Carica un file e ti aiuterò ad analizzarlo. Puoi anche continuare la conversazione dopo l'upload.",
+      ui_components: [],
+      step_id: null,
       isError: false,
+      isLoading: false,
     },
   ]);
 
-  const accept = ".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt";
+  useEffect(() => {
+    return () => {
+      items.forEach((item) => {
+        if (item.preview) URL.revokeObjectURL(item.preview);
+      });
+    };
+  }, [items]);
+
+  const accept = ".png,.jpg,.jpeg,.pdf,.txt";
 
   const isImage = (file) => file.type.startsWith("image/");
 
-  const addBotMessage = (text, options = [], isError = false) => {
+  const addBotMessage = (
+    text,
+    ui_components = [],
+    isError = false,
+    step_id = null
+  ) => {
     setMessages((prev) => [
       ...prev,
       {
         id: crypto.randomUUID(),
         sender: "bot",
         text,
-        options,
+        ui_components,
+        step_id,
         isError,
+        isLoading: false,
       },
     ]);
   };
@@ -56,8 +135,10 @@ export default function ChatbotUploadForm() {
         id: crypto.randomUUID(),
         sender: "user",
         text: `Uploaded: ${uploadedNames}`,
-        options: [],
+        ui_components: [],
+        step_id: null,
         isError: false,
+        isLoading: false,
       },
     ]);
   };
@@ -86,7 +167,8 @@ export default function ChatbotUploadForm() {
         id: thinkingMessageId,
         sender: "bot",
         text: "...",
-        options: [],
+        ui_components: [],
+        step_id: null,
         isError: false,
         isLoading: true,
       },
@@ -111,7 +193,9 @@ export default function ChatbotUploadForm() {
       }
 
       if (!res.ok) {
-        throw new Error(data?.reply || data?.error || "Upload failed.");
+        throw new Error(
+          data?.reply || data?.error || data?.detail || "Upload fallito"
+        );
       }
 
       if (data?.session_id) {
@@ -124,7 +208,8 @@ export default function ChatbotUploadForm() {
             ? {
                 ...message,
                 text: data?.reply || "I analyzed your file.",
-                options: data?.options || [],
+                ui_components: data?.ui_components || [],
+                step_id: data?.step_id || null,
                 isLoading: false,
                 isError: false,
               }
@@ -139,8 +224,9 @@ export default function ChatbotUploadForm() {
           message.id === thinkingMessageId
             ? {
                 ...message,
-                text: err.message || "Something went wrong while uploading.",
-                options: [],
+                text: err.message || "Qualcosa è andato storto durante l'upload.",
+                ui_components: [],
+                step_id: null,
                 isLoading: false,
                 isError: true,
               }
@@ -152,20 +238,31 @@ export default function ChatbotUploadForm() {
     }
   };
 
-  const handleOptionClick = async (option) => {
+  const handleDynamicAction = async ({ stepId, actionType, payload }) => {
     if (!sessionId) {
-      addBotMessage("No active session found. Please upload and send a file first.", [], true);
+      addBotMessage(
+        "Nessuna sessione attiva trovata. Per favore carica e invia un file prima.",
+        [],
+        true
+      );
       return;
     }
+
+    const userText =
+      payload?.selected_option ||
+      payload?.value ||
+      "User interaction";
 
     setMessages((prev) => [
       ...prev,
       {
         id: crypto.randomUUID(),
         sender: "user",
-        text: option,
-        options: [],
+        text: userText,
+        ui_components: [],
+        step_id: null,
         isError: false,
+        isLoading: false,
       },
     ]);
 
@@ -177,7 +274,8 @@ export default function ChatbotUploadForm() {
         id: thinkingMessageId,
         sender: "bot",
         text: "...",
-        options: [],
+        ui_components: [],
+        step_id: null,
         isError: false,
         isLoading: true,
       },
@@ -193,7 +291,9 @@ export default function ChatbotUploadForm() {
         },
         body: JSON.stringify({
           session_id: sessionId,
-          selected_option: option,
+          step_id: stepId,
+          action_type: actionType,
+          payload,
         }),
       });
 
@@ -205,7 +305,9 @@ export default function ChatbotUploadForm() {
       }
 
       if (!res.ok) {
-        throw new Error(data?.reply || data?.error || "Next step request failed.");
+        throw new Error(
+          data?.reply || data?.error || data?.detail || "Richiesta fallita per il passo successivo."
+        );
       }
 
       setMessages((prev) =>
@@ -214,7 +316,8 @@ export default function ChatbotUploadForm() {
             ? {
                 ...message,
                 text: data?.reply || "Here is the next step.",
-                options: data?.options || [],
+                ui_components: data?.ui_components || [],
+                step_id: data?.step_id || null,
                 isLoading: false,
                 isError: false,
               }
@@ -229,8 +332,9 @@ export default function ChatbotUploadForm() {
           message.id === thinkingMessageId
             ? {
                 ...message,
-                text: err.message || "Something went wrong while getting the next step.",
-                options: [],
+                text: err.message || "Qualcosa è andato storto durante la fase successiva.",
+                ui_components: [],
+                step_id: null,
                 isLoading: false,
                 isError: true,
               }
@@ -247,7 +351,7 @@ export default function ChatbotUploadForm() {
       <div className="chat-shell">
         <div className="chat-header">
           <h1>File Assistant</h1>
-          <p>Upload a file or image and continue the conversation below.</p>
+          <p>Carica un file e continua la conversazione</p>
         </div>
 
         <div className="chat-window">
@@ -263,21 +367,16 @@ export default function ChatbotUploadForm() {
                   {message.text}
                 </p>
 
-                {message.options && message.options.length > 0 && !message.isLoading && (
-                  <div className="chat-options">
-                    {message.options.map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        className="option-btn"
-                        onClick={() => handleOptionClick(option)}
-                        disabled={isBotThinking}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {message.ui_components &&
+                  message.ui_components.length > 0 &&
+                  !message.isLoading && (
+                    <DynamicUIRenderer
+                      components={message.ui_components}
+                      stepId={message.step_id}
+                      onSubmitAction={handleDynamicAction}
+                      disabled={isBotThinking}
+                    />
+                  )}
               </div>
             </div>
           ))}
@@ -334,7 +433,7 @@ export default function ChatbotUploadForm() {
             onClick={() => !isBotThinking && inputRef.current?.click()}
           >
             <span className="upload-plus">+</span>
-            <span className="upload-text">Upload image or file</span>
+            <span className="upload-text">Carica un'immagine o un file</span>
 
             <input
               ref={inputRef}
@@ -342,7 +441,10 @@ export default function ChatbotUploadForm() {
               accept={accept}
               multiple
               className="hidden-input"
-              onChange={(e) => addFiles(e.target.files)}
+              onChange={(e) => {
+                addFiles(e.target.files);
+                e.target.value = "";
+              }}
               disabled={isBotThinking}
             />
           </div>
@@ -352,10 +454,12 @@ export default function ChatbotUploadForm() {
             className="send-btn"
             disabled={!items.length || isBotThinking}
           >
-            {isBotThinking ? "..." : "Send"}
+            {isBotThinking ? "..." : "Invia"}
           </button>
         </form>
       </div>
     </div>
   );
 }
+
+export default ChatbotUploadForm;

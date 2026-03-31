@@ -33,5 +33,16 @@ export default defineConfig({
       suppressWarnings: true,
       type: 'module',
     },
+
   })],
+  //questo permette di fare richieste al backend senza incorrere in problemi di CORS durante lo sviluppo, VERSO FastAPI
+
+  server: {
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+    },
+  },
 })
