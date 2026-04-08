@@ -27,4 +27,4 @@ class NextStepRequest(BaseModel):
     payload: Dict[str, Any]
 
 class ErrorResponse(BaseModel):
-    error: str
+    detail: str

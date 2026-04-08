@@ -15,20 +15,20 @@ UI_RESPONSE_SCHEMA = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "component": {"type": "string", "enum": ["button_group"]},
+                    "component": {"type": "string", "enum": ["button_group", "checklist", "slider"]}, # adesso aggiungo checklist e slider
                     "label": {"type": "string"},
                     "options": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "minItems": 3,
-                        "maxItems": 3,
-                    },
+                    }, # aggiungo anche più items, non per forza 3
+                    "min_value": {"type": "integer"},
+                    "max_value": {"type": "integer"},
                 },
-                "required": ["component", "label", "options"],
+                "required": ["component", "label"],
                 "additionalProperties": False,
             },
             "minItems": 1,
-            "maxItems": 1,
+            "maxItems": 3, # limito a 3 componenti massimo per ora
         },
     },
     "required": ["step_id", "reply", "ui_components"],
@@ -72,7 +72,8 @@ def store_user_turn(session_id: str, action_type: str, payload: dict, step_id: s
         "step_id": step_id,
     })
 
-def call_ollama_json(prompt: str, model: str = None, image_path: str = None):
+# image_path è una lista ora per gestire poi più file nel caso
+def call_ollama_json(prompt: str, model: str = None, image_path: list[str] = None):
     model = model or settings.OLLAMA_MODEL
     image_path = image_path or []
 
@@ -103,83 +104,115 @@ def call_ollama_json(prompt: str, model: str = None, image_path: str = None):
     print("=== OLLAMA TEXT ===")
     print(text)
 
-    data = json.loads(text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        print("JSON PARSE ERROR:", repr(e))
+        print("RAW TEXT THAT FAILED:")
+        print(text)
+
+        return {
+            "step_id": "fallback_step",
+            "reply": "Il modello ha prodotto una risposta non valida. Uso un fallback sicuro.",
+            "ui_components": [
+                {
+                    "component": "button_group",
+                    "label": "Scegli come continuare",
+                    "options": [
+                        "Riprova analisi",
+                        "Usa diagnosi guidata",
+                        "Torna indietro",
+                    ],
+                }
+            ],
+        }
 
     # normalizzazione minima dello schema
     if isinstance(data.get("step_id"), int):
         data["step_id"] = f"step_{data['step_id']}"
 
+    dynamic_components = {"button_group", "checklist", "slider"}
     normalized_components = []
 
     for component in data.get("ui_components", []):
         # se il modello restituisce una stringa semplice
         if isinstance(component, str):
+            safe_component = component if component in dynamic_components else "button_group"
             normalized_components.append({
-                "component": component,
+                "component": safe_component,
                 "label": "Seleziona un'opzione",
-                "options": ["Opzione 1", "Opzione 2", "Opzione 3"],
+                "options": ["Opzione 1", "Opzione 2", "Opzione 3"] if safe_component != "slider" else [],
+                "min_value": 0 if safe_component == "slider" else None,
+                "max_value": 10 if safe_component == "slider" else None,
             })
             continue
 
         # se restituisce un dict
         if isinstance(component, dict):
-            # normalizza il nome del tipo componente
-            if "type" in component and "component" not in component:
-                component["component"] = component.pop("type")
+            detected_component = None
 
-            if "name" in component and "component" not in component:
-                component["component"] = component.pop("name")
+            if component.get("component") in dynamic_components:
+                detected_component = component["component"]
+            elif component.get("type") in dynamic_components:
+                detected_component = component["type"]
+            elif component.get("component_type") in dynamic_components:
+                detected_component = component["component_type"]
+            elif component.get("name") in dynamic_components:
+                detected_component = component["name"]
 
-            if "component_type" in component and "component" not in component:
-                component["component"] = component.pop("component_type")
+            if detected_component is None:
+                detected_component = "button_group"
 
-            # label di fallback
-            if "label" not in component:
-                component["label"] = "Seleziona un'opzione"
+            normalized = {
+                "component": detected_component,
+                "label": component.get("label", "Seleziona un'opzione"),
+            }
 
-            # normalizza options
-            raw_options = component.get("options", [])
+            if detected_component in {"button_group", "checklist"}:
+                raw_options = component.get("options", [])
+                normalized_options = []
 
-            normalized_options = []
-            for option in raw_options:
-                # caso semplice: già stringa
-                if isinstance(option, str):
-                    normalized_options.append(option)
-                # caso oggetto tipo {"text": "...", "value": "..."}
-                elif isinstance(option, dict):
-                    if "text" in option:
-                        normalized_options.append(option["text"])
-                    elif "label" in option:
-                        normalized_options.append(option["label"])
-                    elif "value" in option:
-                        normalized_options.append(str(option["value"]))
+                for option in raw_options:
+                    if isinstance(option, str):
+                        normalized_options.append(option)
+                    elif isinstance(option, dict):
+                        if "text" in option:
+                            normalized_options.append(option["text"])
+                        elif "label" in option:
+                            normalized_options.append(option["label"])
+                        elif "value" in option:
+                            normalized_options.append(str(option["value"]))
 
-            # fallback se non ci sono opzioni valide
-            if not normalized_options:
-                normalized_options = ["Opzione 1", "Opzione 2", "Opzione 3"]
+                if not normalized_options:
+                    normalized_options = ["Opzione 1", "Opzione 2", "Opzione 3"]
 
-            component["options"] = normalized_options[:3]
+                normalized["options"] = normalized_options
 
-            normalized_components.append(component)
+            if detected_component == "slider":
+                normalized["min_value"] = component.get("min_value", 0)
+                normalized["max_value"] = component.get("max_value", 10)
 
-            # fallback finale
-            if not normalized_components:
-                normalized_components = [
-                    {
-                        "component": "button_group",
-                        "label": "Scegli come continuare",
-                        "options": [
-                            "Identifica il problema",
-                            "Verifica il danno visibile",
-                            "Inizia diagnosi guidata",
-                        ],
-                    }
-                ]
+            normalized_components.append(normalized)
 
-            data["ui_components"] = normalized_components
+    if not normalized_components:
+        normalized_components = [
+            {
+                "component": "button_group",
+                "label": "Scegli come continuare",
+                "options": [
+                    "Identifica il problema",
+                    "Verifica il danno visibile",
+                    "Inizia diagnosi guidata",
+                ],
+            }
+        ]
+
+    data["ui_components"] = normalized_components
     return data
 
 def call_openai_for_initial_analysis(file_infos):
+    file_names = ", ".join(f["original_name"] for f in file_infos)
+
     image_files = [
         f for f in file_infos
         if (f.get("content_type") or "").startswith("image/")
@@ -188,163 +221,147 @@ def call_openai_for_initial_analysis(file_infos):
     if image_files:
         image_path = [f["path"] for f in image_files]
 
-        prompt = """
-            Sei un planner di troubleshooting operativo per oggetti fisici reali.
+        prompt = f"""
+        Sei un planner di troubleshooting operativo per oggetti fisici reali.
 
-            Analizza l'immagine caricata dall'utente.
-            Il tuo compito NON è essere un chatbot generico.
-            NON devi proporre azioni come "salva", "annulla", "rivedi".
-            Devi proporre il primo step di una GUI dinamica per diagnosticare un possibile problema fisico visibile.
+        L'utente ha caricato questi file: {file_names}.
 
-            Le opzioni devono essere realistiche per troubleshooting operativo, ad esempio:
-            - identificare il sintomo principale
-            - verificare una perdita o un danno visibile
-            - iniziare una diagnosi guidata
-            - confermare una condizione di sicurezza o osservazione
+        Analizza l'immagine e genera il prossimo stato di una GUI dinamica per una diagnosi guidata passo dopo passo.
 
-            Restituisci solo un JSON valido con:
-            - step_id
-            - reply
-            - ui_components
+        Il tuo compito non è essere un chatbot generico.
+        Non proporre azioni come "salva", "annulla", "rivedi".
+        Devi scegliere il componente UI più adatto in base al tipo di informazione che serve nel passo corrente.
 
-            Regole:
-            - tutto in italiano
-            - esattamente un componente
-            - il componente deve essere "button_group"
-            - esattamente 3 opzioni
-            - le opzioni devono essere coerenti con ciò che si vede nell'immagine
-            - non usare markdown
-            """
+        Puoi usare solo UNO di questi componenti:
+        - "button_group" se serve una scelta singola tra alternative
+        - "checklist" se l'utente deve selezionare più sintomi o condizioni osservabili
+        - "slider" se serve stimare intensità, gravità o livello di danno
+
+        Restituisci solo JSON valido con questa struttura:
+        {{
+        "step_id": "diag_001",
+        "reply": "breve messaggio in italiano",
+        "ui_components": [
+            {{
+            "component": "button_group" oppure "checklist" oppure "slider",
+            "label": "breve etichetta in italiano",
+            "options": ["..."] se il componente è button_group o checklist,
+            "min_value": 0 se il componente è slider,
+            "max_value": 10 se il componente è slider
+            }}
+        ]
+        }}
+
+        Regole obbligatorie:
+        - genera un solo step
+        - genera un solo componente in ui_components
+        - usa solo i componenti: button_group, checklist, slider
+        - se usi button_group o checklist, options deve essere una lista di stringhe
+        - se usi slider, includi min_value e max_value
+        - tutto deve essere in italiano
+        - non usare markdown
+        - non aggiungere testo fuori dal JSON
+        """
 
         return call_ollama_json(prompt, image_path=image_path)
 
     file_names = ", ".join(f["original_name"] for f in file_infos)
 
     prompt = f"""
-        Sei un planner di troubleshooting operativo.
+    Sei un planner di troubleshooting operativo per oggetti fisici reali.
 
-        L'utente ha caricato questi file: {file_names}.
+    L'utente ha caricato questi file: {file_names}.
 
-        Non hai a disposizione un'immagine analizzabile, quindi genera un primo step generico ma utile per iniziare una diagnosi.
+    Analizza l'immagine e genera il prossimo stato di una GUI dinamica per una diagnosi guidata passo dopo passo.
 
-        Restituisci solo un JSON valido con:
-        - step_id
-        - reply
-        - ui_components
+    Il tuo compito non è essere un chatbot generico.
+    Non proporre azioni come "salva", "annulla", "rivedi".
+    Devi scegliere il componente UI più adatto in base al tipo di informazione che serve nel passo corrente.
 
-        Regole:
-        - tutto in italiano
-        - esattamente un componente
-        - il componente deve essere "button_group"
-        - esattamente 3 opzioni
-        - non usare markdown
-            """
+    Puoi usare solo UNO di questi componenti:
+    - "button_group" se serve una scelta singola tra alternative
+    - "checklist" se l'utente deve selezionare più sintomi o condizioni osservabili
+    - "slider" se serve stimare intensità, gravità o livello di danno
+
+    Restituisci solo JSON valido con questa struttura:
+    {{
+    "step_id": "diag_001",
+    "reply": "breve messaggio in italiano",
+    "ui_components": [
+        {{
+        "component": "button_group" oppure "checklist" oppure "slider",
+        "label": "breve etichetta in italiano",
+        "options": ["..."] se il componente è button_group o checklist,
+        "min_value": 0 se il componente è slider,
+        "max_value": 10 se il componente è slider
+        }}
+    ]
+    }}
+
+    Regole obbligatorie:
+    - genera un solo step
+    - genera un solo componente in ui_components
+    - usa solo i componenti: button_group, checklist, slider
+    - se usi button_group o checklist, options deve essere una lista di stringhe
+    - se usi slider, includi min_value e max_value
+    - tutto deve essere in italiano
+    - non usare markdown
+    - non aggiungere testo fuori dal JSON
+    """
 
     return call_ollama_json(prompt)
 
 def call_openai_for_next_step(session_id: str, step_id: str, action_type: str, payload: dict):
     selected = payload.get("selected_option", "")
+    selected_list = payload.get("selected_options", [])
+    slider_value = payload.get("value", None)
 
-    if step_id == "step_1":
-        if selected == "Identifica il problema":
-            return {
-                "step_id": "step_2_identify",
-                "reply": "Ti aiuterò a identificare il problema. Quale di questi descrive meglio il problema visibile?",
-                "ui_components": [
-                    {
-                        "component": "button_group",
-                        "label": "Scegli il sintomo più visibile",
-                        "options": [
-                            "Perdita",
-                            "Arrugginito",
-                            "Componente allentato",
-                            "Crepa o danno visibile",
-                        ],
-                    }
-                ],
-            }
+    if action_type == "checklist_submit":
+        return {
+            "step_id": f"{step_id}_after_checklist",
+            "reply": f"Hai selezionato questi sintomi: {', '.join(selected_list)}. Ora indica la gravità del problema.",
+            "ui_components": [
+                {
+                    "component": "slider",
+                    "label": "Quanto è grave il problema osservato?",
+                    "min_value": 0,
+                    "max_value": 10,
+                }
+            ],
+        }
 
-        if selected == "Spiega il problema visibile":
-            return {
-                "step_id": "step_2_explain",
-                "reply": "Ti guiderò analizzando il problema. Quale di questi descrive meglio il problema visibile?",
-                "ui_components": [
-                    {
-                        "component": "button_group",
-                        "label": "Scegli la condizione",
-                        "options": [
-                            "Problema minore",
-                            "Problema moderato",
-                            "Danno visibile grave",
-                        ],
-                    }
-                ],
-            }
+    if action_type == "slider_submit":
+        return {
+            "step_id": f"{step_id}_after_slider",
+            "reply": f"Hai indicato un livello di gravità pari a {slider_value}. Ora scegli come vuoi proseguire.",
+            "ui_components": [
+                {
+                    "component": "button_group",
+                    "label": "Prossima azione",
+                    "options": [
+                        "Continua diagnosi",
+                        "Mostra istruzioni semplici",
+                        "Ricomincia",
+                    ],
+                }
+            ],
+        }
 
+    if action_type == "button_group_submit":
         if selected == "Guidami passo dopo passo":
             return {
-                "step_id": "step_2_guide",
-                "reply": "Ti guiderò passo dopo passo. Prima di tutto, confermi che l'oggetto è spento e sicuro da ispezionare?",
+                "step_id": "step_2_checklist",
+                "reply": "Seleziona tutti i sintomi che osservi.",
                 "ui_components": [
                     {
-                        "component": "button_group",
-                        "label": "Before continuing, confirm the situation",
+                        "component": "checklist",
+                        "label": "Sintomi osservabili",
                         "options": [
-                            "L'oggetto è spento",
-                            "L'oggetto è sicuro da ispezionare",
-                            "Sono pronto per il primo passo",
-                        ],
-                    }
-                ],
-            }
-
-    if step_id == "step_2_guide":
-        if selected == "L'oggetto è spento":
-            return {
-                "step_id": "step_3_guide_power",
-                "reply": "Bene, adesso analizza l'oggetto",
-                "ui_components": [
-                    {
-                        "component": "button_group",
-                        "label": "Cosa noti?",
-                        "options": [
-                            "Una perdita",
-                            "Un pezzo allentato",
-                            "Niente di strano",
-                        ],
-                    }
-                ],
-            }
-
-        if selected == "L'oggetto è sicuro da ispezionare":
-            return {
-                "step_id": "step_3_guide_safety",
-                "reply": "Bene. Successivamente, controlla se le parti visibili mostrano corrosione o danni fisici.",
-                "ui_components": [
-                    {
-                        "component": "button_group",
-                        "label": "Scegli cosa vedi",
-                        "options": [
-                            "Corrosione",
-                            "Crepa",
-                            "Nessun danno visibile",
-                        ],
-                    }
-                ],
-            }
-
-        if selected == "Sono pronto per il primo passo":
-            return {
-                "step_id": "step_3_guide_ready",
-                "reply": "Step 1: ispeziona la base dell'oggetto per bene e analizza le anomalie",
-                "ui_components": [
-                    {
-                        "component": "button_group",
-                        "label": "Scegli il problema",
-                        "options": [
-                            "Perdita alla base",
+                            "Perdita continua",
+                            "Perdita solo quando aperto",
+                            "Ruggine visibile",
+                            "Base bagnata",
                             "Maniglia allentata",
-                            "Ruggine vicino all'giunto",
                         ],
                     }
                 ],
@@ -352,7 +369,7 @@ def call_openai_for_next_step(session_id: str, step_id: str, action_type: str, p
 
     return {
         "step_id": "fallback_step",
-        "reply": f"Hai selezionato: {selected}. Ho ricevuto il feedback ma il flusso è ancora statico",
+        "reply": "Ho ricevuto il tuo feedback. Scegli come continuare.",
         "ui_components": [
             {
                 "component": "button_group",

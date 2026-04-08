@@ -1,0 +1,51 @@
+.dynamic-ui-block {
+  margin-top: 12px;
+}
+
+.dynamic-ui-label {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #2f3b52;
+  font-weight: 500;
+}
+
+.checklist-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.checklist-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #334155;
+  background: #f8fafc;
+  border: 1px solid #dbe4f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.checklist-option:hover {
+  background: #f1f5f9;
+  border-color: #bfd0e3;
+}
+
+.checklist-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.checklist-option span {
+  line-height: 1.4;
+}
+
+.checklist-submit-btn {
+  margin-top: 4px;
+}

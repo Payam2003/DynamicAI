@@ -1,5 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
-import "./ChatbotUploadForm.css";
+import "../css/ChatbotUploadForm.css";
+import ChecklistBlock from "./ChecklistBlock";
+import SliderBlock from "./SliderBlock";
 
 function DynamicUIRenderer({ components, stepId, onSubmitAction, disabled }) {
   return (
@@ -36,26 +38,30 @@ function DynamicUIRenderer({ components, stepId, onSubmitAction, disabled }) {
             </div>
           );
         }
-        // Ancora da valutare i componenti slider e checklist per la dynamicUI, bisogna valutare su come implementarli
-        /*if (component.component === "checklist") {
+
+        if (component.component === "checklist") {
           return (
-            <div key={`${stepId}-${index}`} className="dynamic-ui-block">
-              <p className="dynamic-ui-label">
-                {component.label || "Checklist component ancora da implementare."}
-              </p>
-            </div>
+            <ChecklistBlock
+              key={`${stepId}-${index}`}
+              component={component}
+              stepId={stepId}
+              onSubmitAction={onSubmitAction}
+              disabled={disabled}
+            />
           );
         }
 
         if (component.component === "slider") {
           return (
-            <div key={`${stepId}-${index}`} className="dynamic-ui-block">
-              <p className="dynamic-ui-label">
-                {component.label || "Slider component ancora da implementare."}
-              </p>
-            </div>
+            <SliderBlock
+              key={`${stepId}-${index}`}
+              component={component}
+              stepId={stepId}
+              onSubmitAction={onSubmitAction}
+              disabled={disabled}
+            />
           );
-        }*/
+        }
 
         return null;
       })}
@@ -207,7 +213,7 @@ function ChatbotUploadForm() {
           message.id === thinkingMessageId
             ? {
                 ...message,
-                text: data?.reply || "I analyzed your file.",
+                text: data?.reply || "Ho analizzato il file",
                 ui_components: data?.ui_components || [],
                 step_id: data?.step_id || null,
                 isLoading: false,
@@ -250,6 +256,9 @@ function ChatbotUploadForm() {
 
     const userText =
       payload?.selected_option ||
+      (Array.isArray(payload?.selected_options)
+        ? payload.selected_options.join(", ")
+        : null) ||
       payload?.value ||
       "User interaction";
 
@@ -315,7 +324,7 @@ function ChatbotUploadForm() {
           message.id === thinkingMessageId
             ? {
                 ...message,
-                text: data?.reply || "Here is the next step.",
+                text: data?.reply || "Ecco il passo successivo",
                 ui_components: data?.ui_components || [],
                 step_id: data?.step_id || null,
                 isLoading: false,
@@ -410,7 +419,7 @@ function ChatbotUploadForm() {
                   onClick={() => removeFile(item.id)}
                   disabled={isBotThinking}
                 >
-                  Remove
+                  Rimuovi
                 </button>
               </div>
             ))}

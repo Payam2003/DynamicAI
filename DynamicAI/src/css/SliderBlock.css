@@ -1,0 +1,42 @@
+.dynamic-ui-block {
+  margin-top: 12px;
+}
+
+.dynamic-ui-label {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #2f3b52;
+  font-weight: 500;
+}
+
+.slider-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #dbe4f0;
+  border-radius: 12px;
+}
+
+.slider-block input[type="range"] {
+  flex: 1;
+  cursor: pointer;
+}
+
+.slider-value {
+  min-width: 32px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 6px 8px;
+}
+
+.slider-submit-btn {
+  margin-top: 4px;
+}
