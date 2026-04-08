@@ -28,6 +28,7 @@ async def health_check():
     responses={400: {"model": ErrorResponse}},
 )
 async def upload_files(files: List[UploadFile] = File(...)):
+    print(">>> upload_files route reached")
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded.")
 
