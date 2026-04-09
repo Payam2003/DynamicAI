@@ -137,15 +137,18 @@ function ChatbotUploadForm() {
 
     setMessages((prev) => [
       ...prev,
-      {
+      ...next.map((item) => ({
         id: crypto.randomUUID(),
         sender: "user",
-        text: `Uploaded: ${uploadedNames}`,
+        text: `Uploaded: ${item.file.name}`,
+        fileName: item.file.name,
+        preview: item.preview || null,
+        isImage: !!item.preview,
         ui_components: [],
         step_id: null,
         isError: false,
         isLoading: false,
-      },
+      })),
     ]);
   };
 
@@ -375,6 +378,15 @@ function ChatbotUploadForm() {
                 <p className={message.isLoading ? "thinking-text" : ""}>
                   {message.text}
                 </p>
+                {message.sender === "user" && message.isImage && message.preview && (
+                  <div className="chat-image-preview-wrapper">
+                    <img
+                      src={message.preview}
+                      alt={message.fileName || "uploaded image"}
+                      className="chat-image-preview"
+                    />
+                  </div>
+                )}
 
                 {message.ui_components &&
                   message.ui_components.length > 0 &&

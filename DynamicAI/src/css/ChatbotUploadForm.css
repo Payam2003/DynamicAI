@@ -302,3 +302,19 @@
     content: "";
   }
 }
+
+.chat-image-preview-wrapper {
+  margin-top: 10px;
+}
+
+.chat-image-preview {
+  display: block;
+  max-width: 220px;
+  max-height: 220px;
+  width: auto;
+  height: auto;
+  border-radius: 14px;
+  border: 1px solid #dbe4f0;
+  object-fit: cover;
+  background: #fff;
+}
