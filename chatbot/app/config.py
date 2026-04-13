@@ -9,7 +9,7 @@ load_dotenv()
 
 
 class Settings:
-    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3.5:2b")
+    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3.5:4b")
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "app/storage")
     MAX_FILE_SIZE_MB: int = int(os.getenv("MAX_FILE_SIZE_MB", "10"))
 

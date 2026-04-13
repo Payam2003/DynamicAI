@@ -28,7 +28,7 @@ UI_RESPONSE_SCHEMA = {
                 "additionalProperties": False,
             },
             "minItems": 1,
-            "maxItems": 3, # limito a 3 componenti massimo per ora
+            "maxItems": 1,
         },
     },
     "required": ["step_id", "reply", "ui_components"],
@@ -43,6 +43,12 @@ def create_session(file_infos):
         "history": [],
         "last_ui_components": [],
         "last_step_id": None,
+        "stato_analisi": {
+            "problemi_sospetti": None,
+            "sintomi_osservati": [],
+            "gravità_stimata": None,
+            "concentrazione_attuale": None,
+        },
     }
     return session_id
 
@@ -169,7 +175,12 @@ def call_ollama_json(prompt: str, model: str = None, image_path: list[str] = Non
             }
 
             if detected_component in {"button_group", "checklist"}:
-                raw_options = component.get("options", [])
+                raw_options = (
+                    component.get("options")
+                    or component.get("items")
+                    or component.get("option_strings")
+                    or []
+                )
                 normalized_options = []
 
                 for option in raw_options:
@@ -222,162 +233,196 @@ def call_openai_for_initial_analysis(file_infos):
         image_path = [f["path"] for f in image_files]
 
         prompt = f"""
-        Sei un planner di troubleshooting operativo per oggetti fisici reali.
+Sei un planner di troubleshooting operativo per oggetti fisici reali.
 
-        L'utente ha caricato questi file: {file_names}.
+L'utente ha caricato questi file: {file_names}.
 
-        Analizza l'immagine e genera il prossimo stato di una GUI dinamica per una diagnosi guidata passo dopo passo.
+Analizza l'immagine e genera SOLO il prossimo step di una GUI dinamica per diagnosi guidata.
 
-        Il tuo compito non è essere un chatbot generico.
-        Non proporre azioni come "salva", "annulla", "rivedi".
-        Devi scegliere il componente UI più adatto in base al tipo di informazione che serve nel passo corrente.
+Non sei un chatbot generico.
+Non proporre azioni come "salva", "annulla", "rivedi".
 
-        Puoi usare solo UNO di questi componenti:
-        - "button_group" se serve una scelta singola tra alternative
-        - "checklist" se l'utente deve selezionare più sintomi o condizioni osservabili
-        - "slider" se serve stimare intensità, gravità o livello di danno
+Scegli il componente UI più adatto tra:
+- "button_group" per una scelta singola
+- "checklist" per selezionare più sintomi o condizioni
+- "slider" per indicare gravità, intensità o livello del problema
 
-        Restituisci solo JSON valido con questa struttura:
-        {{
-        "step_id": "diag_001",
-        "reply": "breve messaggio in italiano",
-        "ui_components": [
-            {{
-            "component": "button_group" oppure "checklist" oppure "slider",
-            "label": "breve etichetta in italiano",
-            "options": ["..."] se il componente è button_group o checklist,
-            "min_value": 0 se il componente è slider,
-            "max_value": 10 se il componente è slider
-            }}
-        ]
-        }}
+Restituisci solo JSON valido con:
+- step_id
+- reply
+- ui_components
 
-        Regole obbligatorie:
-        - genera un solo step
-        - genera un solo componente in ui_components
-        - usa solo i componenti: button_group, checklist, slider
-        - se usi button_group o checklist, options deve essere una lista di stringhe
-        - se usi slider, includi min_value e max_value
-        - tutto deve essere in italiano
-        - non usare markdown
-        - non aggiungere testo fuori dal JSON
-        """
-
+Regole obbligatorie:
+- genera un solo step
+- genera un solo componente in ui_components
+- preferisci un button_group per il primo step iniziale della diagnosi
+- usa solo button_group, checklist o slider
+- se usi button_group o checklist, options deve essere una lista di stringhe
+- se usi slider, includi min_value e max_value
+- tutto deve essere in italiano
+- non usare markdown
+- non aggiungere testo fuori dal JSON
+- non dedurre componenti interni specifici se non chiaramente visibili nell'immagine, concentrati su sintomi osservabili o condizioni evidenti
+- usa ipotesi prudenti e progressive
+"""
         return call_ollama_json(prompt, image_path=image_path)
 
-    file_names = ", ".join(f["original_name"] for f in file_infos)
-
     prompt = f"""
-    Sei un planner di troubleshooting operativo per oggetti fisici reali.
+Sei un planner di troubleshooting operativo.
 
-    L'utente ha caricato questi file: {file_names}.
+L'utente ha caricato questi file: {file_names}.
 
-    Analizza l'immagine e genera il prossimo stato di una GUI dinamica per una diagnosi guidata passo dopo passo.
+Non hai un'immagine analizzabile, quindi genera SOLO il primo step utile per iniziare una diagnosi guidata.
 
-    Il tuo compito non è essere un chatbot generico.
-    Non proporre azioni come "salva", "annulla", "rivedi".
-    Devi scegliere il componente UI più adatto in base al tipo di informazione che serve nel passo corrente.
+Scegli il componente UI più adatto tra:
+- "button_group" per una scelta singola
+- "checklist" per selezionare più sintomi o condizioni
+- "slider" per indicare gravità o intensità
 
-    Puoi usare solo UNO di questi componenti:
-    - "button_group" se serve una scelta singola tra alternative
-    - "checklist" se l'utente deve selezionare più sintomi o condizioni osservabili
-    - "slider" se serve stimare intensità, gravità o livello di danno
+Restituisci solo JSON valido con:
+- step_id
+- reply
+- ui_components
 
-    Restituisci solo JSON valido con questa struttura:
-    {{
-    "step_id": "diag_001",
-    "reply": "breve messaggio in italiano",
-    "ui_components": [
-        {{
-        "component": "button_group" oppure "checklist" oppure "slider",
-        "label": "breve etichetta in italiano",
-        "options": ["..."] se il componente è button_group o checklist,
-        "min_value": 0 se il componente è slider,
-        "max_value": 10 se il componente è slider
-        }}
-    ]
-    }}
-
-    Regole obbligatorie:
-    - genera un solo step
-    - genera un solo componente in ui_components
-    - usa solo i componenti: button_group, checklist, slider
-    - se usi button_group o checklist, options deve essere una lista di stringhe
-    - se usi slider, includi min_value e max_value
-    - tutto deve essere in italiano
-    - non usare markdown
-    - non aggiungere testo fuori dal JSON
-    """
-
+Regole obbligatorie:
+- genera un solo step
+- genera un solo componente in ui_components
+- preferisci un button_group per il primo step iniziale della diagnosi
+- usa solo button_group, checklist o slider
+- se usi button_group o checklist, options deve essere una lista di stringhe
+- se usi slider, includi min_value e max_value
+- tutto deve essere in italiano
+- non usare markdown
+- non aggiungere testo fuori dal JSON
+"""
     return call_ollama_json(prompt)
 
 def call_openai_for_next_step(session_id: str, step_id: str, action_type: str, payload: dict):
-    selected = payload.get("selected_option", "")
-    selected_list = payload.get("selected_options", [])
-    slider_value = payload.get("value", None)
+    session = SESSIONS.get(session_id)
 
-    if action_type == "checklist_submit":
+    if not session:
         return {
-            "step_id": f"{step_id}_after_checklist",
-            "reply": f"Hai selezionato questi sintomi: {', '.join(selected_list)}. Ora indica la gravità del problema.",
-            "ui_components": [
-                {
-                    "component": "slider",
-                    "label": "Quanto è grave il problema osservato?",
-                    "min_value": 0,
-                    "max_value": 10,
-                }
-            ],
-        }
-
-    if action_type == "slider_submit":
-        return {
-            "step_id": f"{step_id}_after_slider",
-            "reply": f"Hai indicato un livello di gravità pari a {slider_value}. Ora scegli come vuoi proseguire.",
+            "step_id": "fallback_step",
+            "reply": "Sessione non trovata. Ricarica il file e riprova.",
             "ui_components": [
                 {
                     "component": "button_group",
-                    "label": "Prossima azione",
-                    "options": [
-                        "Continua diagnosi",
-                        "Mostra istruzioni semplici",
-                        "Ricomincia",
-                    ],
+                    "label": "Scegli come continuare",
+                    "options": ["Ricomincia"],
                 }
             ],
         }
 
-    if action_type == "button_group_submit":
-        if selected == "Guidami passo dopo passo":
-            return {
-                "step_id": "step_2_checklist",
-                "reply": "Seleziona tutti i sintomi che osservi.",
-                "ui_components": [
-                    {
-                        "component": "checklist",
-                        "label": "Sintomi osservabili",
-                        "options": [
-                            "Perdita continua",
-                            "Perdita solo quando aperto",
-                            "Ruggine visibile",
-                            "Base bagnata",
-                            "Maniglia allentata",
-                        ],
-                    }
-                ],
-            }
+    stato = session.setdefault(
+        "stato_analisi",
+        {
+            "problemi_sospetti": None,
+            "sintomi_osservati": [],
+            "gravità_stimata": None,
+            "concentrazione_attuale": None,
+        },
+    )
 
-    return {
-        "step_id": "fallback_step",
-        "reply": "Ho ricevuto il tuo feedback. Scegli come continuare.",
-        "ui_components": [
-            {
-                "component": "button_group",
-                "label": "Scegli come continuare",
-                "options": [
-                    "Ricomincia",
-                    "Torna indietro",
-                ],
-            }
-        ],
-    }
+    selected = payload.get("selected_option")
+    selected_list = payload.get("selected_options")
+    slider_value = payload.get("value")
+
+    if action_type == "button_group_submit" and selected:
+        stato["concentrazione_attuale"] = selected
+
+    if action_type == "checklist_submit" and isinstance(selected_list, list):
+        stato["sintomi_osservati"] = selected_list
+        stato["concentrazione_attuale"] = "raccolta_sintomi"
+
+    if action_type == "slider_submit" and slider_value is not None:
+        stato["gravità_stimata"] = slider_value
+        stato["concentrazione_attuale"] = "stima_gravità"
+
+    prompt = build_next_step_prompt(
+        session=session,
+        step_id=step_id,
+        action_type=action_type,
+        payload=payload,
+    )
+
+    image_files = [
+        f["path"] for f in session.get("files", [])
+        if (f.get("content_type") or "").startswith("image/")
+    ]
+
+    return call_ollama_json(
+        prompt=prompt,
+        image_path=image_files if image_files else None,
+    )
+
+def build_next_step_prompt(session: dict, step_id: str, action_type: str, payload: dict) -> str:
+    files = session.get("files", [])
+    history = session.get("history", [])
+    stato_analisi = session.get("stato_analisi", {})
+
+    file_names = ", ".join(f.get("original_name", "file") for f in files)
+
+    history_lines = []
+    for turn in history[-6:]:
+        if turn["role"] == "assistant":
+            history_lines.append(
+                f"Assistant step={turn.get('step_id')}: {turn.get('reply')}"
+            )
+        else:
+            history_lines.append(
+                f"User action={turn.get('action_type')} payload={json.dumps(turn.get('payload', {}), ensure_ascii=False)}"
+            )
+
+    history_text = "\n".join(history_lines) if history_lines else "Nessuna cronologia precedente."
+
+    prompt = f"""
+Sei un planner di troubleshooting operativo per attività fisiche complesse.
+
+L'utente NON usa testo libero: interagisce solo tramite componenti GUI dinamici.
+
+File caricati:
+{file_names}
+
+Step corrente:
+{step_id}
+
+Ultima azione utente:
+- action_type: {action_type}
+- payload: {json.dumps(payload, ensure_ascii=False)}
+
+Stato attuale dell'analisi:
+{json.dumps(stato_analisi, ensure_ascii=False)}
+
+Cronologia recente:
+{history_text}
+
+Genera SOLO il prossimo step della GUI.
+
+Non sei un chatbot generico.
+Non usare markdown.
+Non aggiungere testo fuori dal JSON.
+Non ripetere il passo precedente.
+Il nuovo passo deve aiutare a raccogliere il contesto fisico corretto.
+
+Puoi usare solo UNO di questi componenti:
+- "button_group" per una scelta singola
+- "checklist" per più sintomi o condizioni osservabili
+- "slider" per gravità, intensità o livello
+
+Regole obbligatorie:
+- genera un solo step
+- genera un solo componente in ui_components
+- usa solo button_group, checklist o slider
+- se usi button_group o checklist, options deve essere una lista di stringhe
+- se usi slider, includi min_value e max_value
+- tutto deve essere in italiano
+- scegli il componente più adatto in base allo stato attuale della diagnosi
+- non dedurre componenti interni specifici se non chiaramente visibili nell'immagine, concentrati su sintomi osservabili o condizioni evidenti
+- usa ipotesi prudenti e progressive
+
+Restituisci solo JSON valido con:
+- step_id
+- reply
+- ui_components
+"""
+    return prompt
