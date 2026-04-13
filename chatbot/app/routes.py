@@ -28,7 +28,6 @@ async def health_check():
     responses={400: {"model": ErrorResponse}},
 )
 async def upload_files(files: List[UploadFile] = File(...)):
-    print(">>> upload_files route reached")
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded.")
 
@@ -47,7 +46,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
 
         session_id = create_session(saved_files)
 
-        response_data = call_openai_for_initial_analysis(saved_files)
+        response_data = await call_openai_for_initial_analysis(saved_files)
 
         store_bot_turn(
             session_id=session_id,
@@ -68,7 +67,6 @@ async def upload_files(files: List[UploadFile] = File(...)):
     except HTTPException:
         raise
     except Exception as e:
-        print("UPLOAD ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -79,7 +77,6 @@ async def upload_files(files: List[UploadFile] = File(...)):
 )
 async def next_step(request: NextStepRequest):
     session = get_session(request.session_id)
-
     if not session:
         raise HTTPException(status_code=404, detail="Session not found.")
 
@@ -91,7 +88,7 @@ async def next_step(request: NextStepRequest):
             step_id=request.step_id,
         )
 
-        response_data = call_openai_for_next_step(
+        response_data = await call_openai_for_next_step(
             session_id=request.session_id,
             step_id=request.step_id,
             action_type=request.action_type,
@@ -113,5 +110,4 @@ async def next_step(request: NextStepRequest):
         )
 
     except Exception as e:
-        print("UPLOAD ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))

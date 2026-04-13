@@ -233,7 +233,10 @@ function ChatbotUploadForm() {
           message.id === thinkingMessageId
             ? {
                 ...message,
-                text: err.message || "Qualcosa è andato storto durante l'upload.",
+                text:
+                  err.message?.includes("429")
+                    ? "Hai raggiunto il limite temporaneo del modello gratuito. Riprova più tardi."
+                    : err.message || "Qualcosa è andato storto durante l'upload.",
                 ui_components: [],
                 step_id: null,
                 isLoading: false,
@@ -344,7 +347,10 @@ function ChatbotUploadForm() {
           message.id === thinkingMessageId
             ? {
                 ...message,
-                text: err.message || "Qualcosa è andato storto durante la fase successiva.",
+               text:
+                  err.message?.includes("429")
+                    ? "Hai raggiunto il limite temporaneo del modello gratuito. Riprova più tardi."
+                    : err.message || "Qualcosa è andato storto durante l'upload.",
                 ui_components: [],
                 step_id: null,
                 isLoading: false,
@@ -362,7 +368,7 @@ function ChatbotUploadForm() {
     <div className="chat-page">
       <div className="chat-shell">
         <div className="chat-header">
-          <h1>File Assistant</h1>
+          <h1>DynamicAI</h1>
           <p>Carica un file e continua la conversazione</p>
         </div>
 

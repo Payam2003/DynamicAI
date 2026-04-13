@@ -7,9 +7,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
 class Settings:
-    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3.5:4b")
+    OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
+    OPENROUTER_MODEL: str = os.getenv(
+        "OPENROUTER_MODEL",
+        "openrouter/free"
+    )
+    OPENROUTER_URL: str = os.getenv(
+        "OPENROUTER_URL",
+        "https://openrouter.ai/api/v1/chat/completions"
+    )
+
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "app/storage")
     MAX_FILE_SIZE_MB: int = int(os.getenv("MAX_FILE_SIZE_MB", "10"))
 
@@ -20,6 +28,5 @@ class Settings:
         ".pdf",
         ".txt",
     }
-
 
 settings = Settings()
