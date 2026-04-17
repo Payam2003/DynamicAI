@@ -371,6 +371,29 @@ Regole:
 - genera sezioni che riflettano una sequenza temporale o funzionale implicita del task
 - scegli componenti sensati per il troubleshooting fisico
 - mantieni l'interfaccia coerente, compatta e interamente in italiano
+
+Regole di qualità molto importanti:
+- basa la struttura dell'interfaccia il più possibile sugli elementi visibili o inferibili dai file caricati
+- evita di generare un workflow generico valido per qualsiasi caso simile
+- personalizza sezioni, etichette e opzioni rispetto al caso specifico
+- se l'immagine suggerisce un oggetto, una condizione o un'anomalia visibile, usa queste informazioni per costruire le sezioni
+- ogni sezione deve avere una funzione concreta nel troubleshooting
+- evita sezioni vaghe, ridondanti o troppo generiche
+- preferisci componenti strutturati come checkbox_group, radio_group, button_group e select
+- usa textarea solo se strettamente necessaria
+- usa alert solo quando serve davvero evidenziare un avviso o una conferma importante
+- evita info_card generiche o vuote
+- ogni componente deve avere una funzione chiara e utile
+- non aggiungere componenti superflui
+- non ripetere le stesse informazioni in più sezioni
+
+Linee guida specifiche per il reasoning:
+- l'obiettivo vero è quello di generare un workflow unico generativo composto da una time sequence
+- se il problema sembra visibile nell'immagine, inizia con sezioni di osservazione e verifica guidata
+- se il caso suggerisce possibili cause alternative, usa componenti che aiutino a distinguerle
+- se una decisione dipende da una valutazione graduale, usa slider
+- se una scelta è mutuamente esclusiva, usa radio_group o button_group
+- se servono controlli multipli, usa checkbox_group
 """.strip()
 
     content = build_openrouter_content(prompt, file_infos)

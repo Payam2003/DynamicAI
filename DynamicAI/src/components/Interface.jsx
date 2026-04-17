@@ -193,6 +193,8 @@ function Interface() {
                   _hover={{ bg: "#2f6ae6" }}
                   onClick={handleGenerate}
                   disabled={!selectedFile || loading}
+                  size="xl"
+                  rounded="xl"
                 >
                   {loading ? "Generazione..." : "Genera interfaccia"}
                 </Button>
