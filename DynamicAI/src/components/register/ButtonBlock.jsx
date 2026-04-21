@@ -1,7 +1,12 @@
 import { Box, Button, Flex, Text } from "@chakra-ui/react";
 import { useState } from "react";
 
-export default function Buttonlock({ label, options = [] }) {
+export default function ButtonBlock({
+  label,
+  options = [],
+  sectionId,
+  onValueChange,
+}) {
   const [selected, setSelected] = useState(null);
 
   return (
@@ -17,7 +22,12 @@ export default function Buttonlock({ label, options = [] }) {
             variant={selected === option ? "solid" : "outline"}
             colorScheme="blue"
             size="sm"
-            onClick={() => setSelected(option)}
+            onClick={() => {
+              setSelected(option);
+              if (onValueChange) {
+                onValueChange(sectionId, label, option);
+              }
+            }}
           >
             {option}
           </Button>

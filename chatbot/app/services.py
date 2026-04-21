@@ -1,8 +1,11 @@
 import json
 import base64
 import httpx
+import uuid
 
 from app.config import settings
+
+WORKFLOW_SESSIONS = {}
 
 
 WORKFLOW_UI_SCHEMA = {
@@ -262,10 +265,16 @@ def normalize_workflow_ui_response(data: dict) -> dict:
                 )
 
             if component_type == "info_card":
-                normalized_component["label"] = component.get("label", "Informazione")
+                normalized_component["label"] = component.get(
+                    "label",
+                    component.get("title_text", "Informazione"),
+                )
                 normalized_component["text"] = component.get(
                     "text",
-                    "Nessuna informazione aggiuntiva disponibile.",
+                    component.get(
+                        "description_text",
+                        "Nessuna informazione aggiuntiva disponibile.",
+                    ),
                 )
 
             normalized_section["components"].append(normalized_component)
@@ -310,7 +319,7 @@ Sei un sistema LLM per la progettazione di interfacce dinamiche per task fisici 
 L'utente ha caricato questi file: {file_names}.
 
 Il tuo obiettivo NON è produrre una risposta da chatbot e NON è generare un flusso conversazionale step-by-step.
-Devi invece inferire internamente un workflow di task e trasformarlo in una singola interfaccia dinamica composta da più sezioni strutturate.
+Devi invece inferire internamente un workflow di task e trasformarlo in una singola interfaccia dinamica composta da più sezioni strutturate di una time sequence.
 
 Il workflow deve rimanere implicito.
 Non devi esporlo come conversazione.
@@ -468,3 +477,173 @@ Linee guida specifiche per il reasoning:
         }
 
     return normalize_workflow_ui_response(parsed)
+
+
+
+
+def create_workflow_session(file_infos: list[dict]) -> str:
+    session_id = str(uuid.uuid4())
+    WORKFLOW_SESSIONS[session_id] = {
+        "files": file_infos,
+        "current_ui": None,
+        "feedback_state": {},
+    }
+    return session_id
+
+
+def get_workflow_session(session_id: str):
+    return WORKFLOW_SESSIONS.get(session_id)
+
+
+def update_workflow_session(session_id: str, current_ui: dict, feedback_state: dict):
+    if session_id not in WORKFLOW_SESSIONS:
+        return
+
+    WORKFLOW_SESSIONS[session_id]["current_ui"] = current_ui
+    WORKFLOW_SESSIONS[session_id]["feedback_state"] = feedback_state
+
+
+async def refine_workflow_ui(
+    file_infos: list[dict],
+    current_ui: dict,
+    feedback_state: dict,
+) -> dict:
+    prompt = f"""
+Sei un sistema LLM per la progettazione dinamica di interfacce per task fisici di troubleshooting.
+
+Hai già generato una prima interfaccia strutturata.
+Ora devi aggiornarla sulla base del feedback dell'utente.
+
+Interfaccia attuale:
+{json.dumps(current_ui, ensure_ascii=False)}
+
+Feedback raccolto finora:
+{json.dumps(feedback_state, ensure_ascii=False)}
+
+
+Obiettivo:
+- generare una versione aggiornata dell'interfaccia che tenga conto del feedback ricevuto dall'utente
+- migliorare l'efficacia dell'interfaccia per guidare l'utente nel troubleshooting
+- aggiornare solo le sezioni successive o incomplete
+- NON mantenere sezioni vecchie solo perché erano già presenti
+- NON restituire la stessa interfaccia con sezioni bloccate
+- usare il feedback_state per adattare i componenti della GUI in modo coerente
+- mantenere il workflow implicito ma consistente
+- non trasformare l'interfaccia in una chat
+- non rigenerare arbitrariamente tutto da zero
+- creare una GUI aggiornata che rappresenti lo step successivo del troubleshooting
+- la nuova interfaccia deve mostrare un avanzamento reale verso la risoluzione del problema
+- non continuare ad aprire nuove opzioni all'infinito
+- usa il feedback raccolto per restringere le ipotesi e convergere verso una diagnosi probabile
+- quando il contesto è sufficiente, genera una sezione finale di conclusione con una soluzione consigliata
+- la soluzione finale può essere:
+  - una verifica conclusiva
+  - una riparazione consigliata
+  - una sostituzione consigliata
+  - il contatto con un professionista, se il caso è troppo complesso o rischioso
+- non trasformare l'interfaccia in una chat
+- mantieni coerenza con i file caricati e con il caso specifico
+
+Restituisci SOLO JSON valido con questa struttura:
+{{
+  "title": "string",
+  "summary": "string",
+  "sections": [
+    {{
+      "id": "string",
+      "title": "string",
+      "description": "string",
+      "components": [
+        {{
+          "component": "checkbox_group | radio_group | button_group | slider | select | textarea | alert | info_card",
+          "label": "string",
+          "options": ["string", "string"],
+          "min_value": 0,
+          "max_value": 10,
+          "step": 1,
+          "placeholder": "string",
+          "text": "string",
+          "status": "info | warning | error | success",
+          "title_text": "string",
+          "description_text": "string"
+        }}
+      ]
+    }}
+  ]
+}}
+
+Regole:
+- restituisci solo JSON
+- non usare markdown
+- non usare ```json
+- non mantenere forzatamente le vecchie sezioni
+- non usare il concetto di sezioni bloccate
+- genera una nuova interfaccia coerente con il progresso dell'utente
+- usa feedback_state per adattare i prossimi controlli o decisioni
+- mantieni tutto in italiano
+- evita componenti ridondanti o generici
+- evita di rigenerare la stessa identica struttura se il feedback suggerisce un avanzamento
+- ogni sezione deve avere una funzione concreta nel troubleshooting aggiornato
+- la nuova interfaccia deve mostrare un avanzamento rispetto alla precedente
+- se ci sono già abbastanza indizi, l'ultima sezione deve esprimere una diagnosi probabile o una soluzione consigliata
+- evita di copiare identicamente titoli, descrizioni e componenti della UI attuale
+- conserva la coerenza del caso, ma cambia le sezioni quando il feedback indica che una fase è già stata completata
+""".strip()
+
+    content = build_openrouter_content(prompt, file_infos)
+
+    payload = {
+        "model": settings.OPENROUTER_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": content,
+            }
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "workflow_ui_refine_response",
+                "strict": True,
+                "schema": WORKFLOW_UI_SCHEMA,
+            },
+        },
+    }
+
+    headers = {
+        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:5173",
+        "X-Title": "DynamicAI",
+    }
+
+    async with httpx.AsyncClient(timeout=90.0) as client:
+        response = await client.post(
+            settings.OPENROUTER_URL,
+            headers=headers,
+            json=payload,
+        )
+
+    if response.status_code == 429:
+        raise RuntimeError(
+            "Il modello gratuito è temporaneamente occupato. Riprova tra poco."
+        )
+
+    if response.status_code >= 400:
+        raise RuntimeError(f"OpenRouter error {response.status_code}: {response.text}")
+
+    raw = response.json()
+    text = raw["choices"][0]["message"]["content"].strip()
+    text = strip_markdown_fences(text)
+
+    print("RAW REFINE MODEL CONTENT:")
+    print(text)
+
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        return current_ui
+
+    refined_ui = normalize_workflow_ui_response(parsed)
+
+    return refined_ui

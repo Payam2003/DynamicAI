@@ -1,7 +1,14 @@
 import { Box, Text } from "@chakra-ui/react";
 import { useState } from "react";
 
-export default function SliderBlock({ label, min_value = 0, max_value = 10, step = 1 }) {
+export default function SliderBlock({
+  label,
+  min_value = 0,
+  max_value = 10,
+  step = 1,
+  sectionId,
+  onValueChange,
+}) {
   const [value, setValue] = useState(min_value);
 
   return (
@@ -16,7 +23,14 @@ export default function SliderBlock({ label, min_value = 0, max_value = 10, step
         max={max_value}
         step={step}
         value={value}
-        onChange={(e) => setValue(Number(e.target.value))}
+        onChange={(e) => {
+          const next = Number(e.target.value);
+          setValue(next);
+
+          if (onValueChange) {
+            onValueChange(sectionId, label, next);
+          }
+        }}
         style={{ width: "100%" }}
       />
 

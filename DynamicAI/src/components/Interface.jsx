@@ -20,6 +20,8 @@ function Interface() {
   const [generatedUI, setGeneratedUI] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
+  const [sessionId, setSessionId] = useState(null);
+  const [feedbackState, setFeedbackState] = useState({});
 
   useEffect(() => {
     return () => {
@@ -93,9 +95,58 @@ function Interface() {
       }
 
       setGeneratedUI(data);
+      setSessionId(data.session_id || null);
+      setFeedbackState({});
     } catch (err) {
       console.error(err);
       setErrorText(err.message || "Qualcosa è andato storto.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // dopo il primo feedback dell'utente
+  const handleRefine = async () => {
+    if (!sessionId || !generatedUI) {
+      setErrorText("Nessuna sessione attiva da aggiornare.");
+      return;
+    }
+
+    setLoading(true);
+    setErrorText("");
+
+    try {
+      const res = await fetch("/api/workflow-ui/refine", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          current_ui: generatedUI,
+          feedback_state: feedbackState,
+        }),
+      });
+
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          data?.detail ||
+            data?.error ||
+            "Errore durante l'aggiornamento dell'interfaccia."
+        );
+      }
+
+      setGeneratedUI(data);
+    } catch (err) {
+      console.error(err);
+      setErrorText(err.message || "Qualcosa è andato storto durante il refine.");
     } finally {
       setLoading(false);
     }
@@ -199,6 +250,16 @@ function Interface() {
                   {loading ? "Generazione..." : "Genera interfaccia"}
                 </Button>
 
+                {generatedUI && !loading && (
+                  <Button
+                    variant="outline"
+                    onClick={handleRefine}
+                    disabled={!sessionId}
+                  >
+                    Aggiorna interfaccia
+                  </Button>
+                )}
+
                 {errorText && (
                   <Alert.Root
                     status="error"
@@ -246,7 +307,13 @@ function Interface() {
                   </Flex>
                 )}
 
-                {generatedUI && !loading && <Workflow data={generatedUI} />}
+                {generatedUI && !loading && (
+                  <Workflow
+                    data={generatedUI}
+                    feedbackState={feedbackState}
+                    setFeedbackState={setFeedbackState}
+                  />
+                )}
               </VStack>
             </Card.Body>
           </Card.Root>

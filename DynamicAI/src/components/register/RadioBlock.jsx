@@ -1,7 +1,12 @@
 import { Box, RadioGroup, Text, VStack } from "@chakra-ui/react";
 import { useState } from "react";
 
-export default function RadioBlock({ label, options = [] }) {
+export default function RadioBlock({
+  label,
+  options = [],
+  sectionId,
+  onValueChange,
+}) {
   const [value, setValue] = useState("");
 
   return (
@@ -10,8 +15,16 @@ export default function RadioBlock({ label, options = [] }) {
         {label}
       </Text>
 
-      <RadioGroup.Root value={value} onValueChange={(e) => setValue(e.value)}>
-        <VStack align="stretch">
+      <RadioGroup.Root
+        value={value}
+        onValueChange={(e) => {
+          setValue(e.value);
+          if (onValueChange) {
+            onValueChange(sectionId, label, e.value);
+          }
+        }}
+      >
+        <VStack align="stretch" gap={2}>
           {options.map((option) => (
             <RadioGroup.Item key={option} value={option}>
               <RadioGroup.ItemHiddenInput />

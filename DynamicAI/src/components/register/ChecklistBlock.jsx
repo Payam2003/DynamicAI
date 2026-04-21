@@ -1,15 +1,24 @@
 import { Box, Checkbox, Text, VStack } from "@chakra-ui/react";
 import { useState } from "react";
 
-export default function ChecklistBlock({ label, options = [] }) {
+export default function ChecklistBlock({
+  label,
+  options = [],
+  sectionId,
+  onValueChange,
+}) {
   const [selected, setSelected] = useState([]);
 
   const toggleOption = (option) => {
-    setSelected((prev) =>
-      prev.includes(option)
-        ? prev.filter((item) => item !== option)
-        : [...prev, option]
-    );
+    const next = selected.includes(option)
+      ? selected.filter((item) => item !== option)
+      : [...selected, option];
+
+    setSelected(next);
+
+    if (onValueChange) {
+      onValueChange(sectionId, label, next);
+    }
   };
 
   return (

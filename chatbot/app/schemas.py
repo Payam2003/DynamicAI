@@ -4,6 +4,11 @@
 from typing import List, Optional, Literal, Dict, Any
 from pydantic import BaseModel
 
+class WorkflowRefineRequest(BaseModel):
+    session_id: str
+    current_ui: Dict[str, Any]
+    feedback_state: Dict[str, Any]
+
 
 class UIComponent(BaseModel):
     component: Literal["button_group", "checklist", "slider"]

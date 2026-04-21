@@ -1,7 +1,21 @@
 import { Box, Card, Heading, Text, VStack } from "@chakra-ui/react";
 import { RegistroComponenti } from "./RegistroComponenti.js";
 
-function Workflow({ data }) {
+function Workflow({ data, feedbackState, setFeedbackState }) {
+  const updateSectionFeedback = (sectionId, label, value) => {
+    setFeedbackState((prev) => ({
+      ...prev,
+      [sectionId]: {
+        completed: true,
+        updated_at: new Date().toISOString(),
+        values: {
+          ...(prev[sectionId]?.values || {}),
+          [label]: value,
+        },
+      },
+    }));
+  };
+
   return (
     <VStack align="stretch" gap={5}>
       <Box>
@@ -51,6 +65,8 @@ function Workflow({ data }) {
                   <ComponentToRender
                     key={`${section.id}-${index}`}
                     {...component}
+                    sectionId={section.id}
+                    onValueChange={updateSectionFeedback}
                   />
                 );
               })}

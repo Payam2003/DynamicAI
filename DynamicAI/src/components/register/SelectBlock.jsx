@@ -1,6 +1,11 @@
 import { Box, NativeSelect, Text } from "@chakra-ui/react";
 
-export default function SelectBlock({ label, options = [] }) {
+export default function SelectBlock({
+  label,
+  options = [],
+  sectionId,
+  onValueChange,
+}) {
   return (
     <Box>
       <Text fontWeight="medium" mb={2}>
@@ -8,7 +13,14 @@ export default function SelectBlock({ label, options = [] }) {
       </Text>
 
       <NativeSelect.Root>
-        <NativeSelect.Field placeholder="Seleziona un'opzione">
+        <NativeSelect.Field
+          placeholder="Seleziona un'opzione"
+          onChange={(e) => {
+            if (onValueChange) {
+              onValueChange(sectionId, label, e.target.value);
+            }
+          }}
+        >
           {options.map((option) => (
             <option key={option} value={option}>
               {option}
