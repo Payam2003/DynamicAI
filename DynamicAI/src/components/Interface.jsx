@@ -231,7 +231,7 @@ function Interface() {
                     src={previewUrl}
                     alt="Anteprima"
                     borderRadius="lg"
-                    objectFit="cover"
+                    fit="contain"
                     maxH="360px"
                     border="1px solid"
                     borderColor="#d8e4ff"

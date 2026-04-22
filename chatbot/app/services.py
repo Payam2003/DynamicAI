@@ -1,3 +1,4 @@
+from curses import raw
 import json
 import base64
 import httpx
@@ -450,6 +451,8 @@ Linee guida specifiche per il reasoning:
     raw = response.json()
     text = raw["choices"][0]["message"]["content"].strip()
     text = strip_markdown_fences(text)
+    print("ACTUAL OPENROUTER MODEL:", raw.get("model"))
+    print("ACTUAL PROVIDER:", raw.get("provider"))
 
     print("RAW WORKFLOW MODEL CONTENT:")
     print(text)
@@ -635,6 +638,8 @@ Regole:
     raw = response.json()
     text = raw["choices"][0]["message"]["content"].strip()
     text = strip_markdown_fences(text)
+    print("ACTUAL OPENROUTER MODEL:", raw.get("model"))
+    print("ACTUAL PROVIDER:", raw.get("provider"))
 
     print("RAW REFINE MODEL CONTENT:")
     print(text)
